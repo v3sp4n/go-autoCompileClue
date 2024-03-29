@@ -9,6 +9,7 @@ import (
     "os/exec"
     "time"
     "strings"
+    "bufio"
 )
 
 var PATH string
@@ -40,7 +41,6 @@ func main() {
 								clues[nameDir][f.Name()] = string(lua)
 								fmt.Println(">>new file",nameDir,f.Name())
 							} else if clues[nameDir][f.Name()] != string(lua) {
-								fmt.Println(f.Name())
 								clues[nameDir][f.Name()] = string(lua)
 								compile(nameDir)
 							}
@@ -70,17 +70,27 @@ func compile(who string) {
 	fmt.Println("[compile]",who)
 	os.Remove(PATH+who+".lua")
 
-	cmd := exec.Command("clue","-t=luajit",who,who+".lua")
+	cmd := exec.Command("clue","-t=luajit","--base","_base.lua",who+"\\",who+".lua")
 	cmd.Dir = PATH
+
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+    	fmt.Println("[clue]StdoutPipe(error)",err)
+    } 
+    defer stdout.Close()
+
 	cmd.Start()
 
-	for {
-		if _,err := os.Stat(PATH+who+".lua"); err != nil {
-			break
-		}
+    stdoutScanner := bufio.NewScanner(stdout)
+    go func() {
+        for stdoutScanner.Scan() {
+        	fmt.Println("[clue]",stdoutScanner.Text())
+        }
+    }()
+    if err := cmd.Wait(); err != nil {
+    	fmt.Println("[clue]Wait(error)",err)
+    } else {
+		newLua,_ := ioutil.ReadFile(PATH+"\\"+who+".lua")
+		ioutil.WriteFile(strings.TrimRight(PATH,"clue") + who+".lua", newLua, 0644)
 	}
-
-	newLua,_ := ioutil.ReadFile(PATH+"\\"+who+".lua")
-	ioutil.WriteFile(strings.TrimRight(PATH,"clue") + who+".lua", newLua, 0644)
-
 }
